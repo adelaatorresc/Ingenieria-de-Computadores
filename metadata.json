@@ -1,0 +1,6 @@
+{
+  "name": "ETSISI - Ingeniería de Computadores",
+  "description": "Plataforma de estudio interactiva para el Grado en Ingeniería de Computadores (ETSISI-UPM). Mapas mentales, resúmenes, explicaciones extensas, ejercicios interactivos con cronómetro y simulacros de examen de 2 horas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
