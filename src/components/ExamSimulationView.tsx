@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Topic, Subject } from '../types';
+import { MathView } from './MathView';
 import confetti from 'canvas-confetti';
 import {
   Timer,
@@ -371,9 +372,9 @@ export const ExamSimulationView: React.FC<ExamSimulationViewProps> = ({
                         <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
                           Solución Oficial:
                         </p>
-                        <p className="p-3 rounded-xl bg-slate-900 text-emerald-300 font-mono text-xs mt-1">
-                          {prob.solution.finalAnswer}
-                        </p>
+                        <div className="p-3 rounded-xl bg-emerald-50 dark:bg-slate-900 text-emerald-950 dark:text-emerald-300 font-mono text-xs mt-1 border border-emerald-200 dark:border-slate-800 shadow-2xs">
+                          <MathView math={prob.solution.finalAnswer} />
+                        </div>
                       </div>
 
                       <div className="space-y-2">

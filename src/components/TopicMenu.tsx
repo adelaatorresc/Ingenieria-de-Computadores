@@ -1,6 +1,16 @@
 import React from 'react';
 import { Topic, Subject, SubTopic } from '../types';
-import { Compass, FileText, BookOpen, ListChecks, Timer, ArrowRight, ChevronRight, AlertCircle } from 'lucide-react';
+import {
+  Compass,
+  FileText,
+  BookOpen,
+  ListChecks,
+  Timer,
+  ArrowRight,
+  ChevronRight,
+  Layers,
+  Sparkles
+} from 'lucide-react';
 
 interface TopicMenuProps {
   subject: Subject;
@@ -10,6 +20,7 @@ interface TopicMenuProps {
   onOpenExplanation: (subtopic?: SubTopic) => void;
   onOpenExercises: () => void;
   onOpenExam: () => void;
+  onOpenFlashcards: () => void;
 }
 
 export const TopicMenu: React.FC<TopicMenuProps> = ({
@@ -19,7 +30,8 @@ export const TopicMenu: React.FC<TopicMenuProps> = ({
   onOpenSummary,
   onOpenExplanation,
   onOpenExercises,
-  onOpenExam
+  onOpenExam,
+  onOpenFlashcards
 }) => {
   const isTSO = subject.id === 'tso';
 
@@ -33,18 +45,17 @@ export const TopicMenu: React.FC<TopicMenuProps> = ({
         <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white mt-1">
           {topic.title}
         </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-3xl">
+        <p className="text-sm text-slate-600 dark:text-slate-300 mt-2 max-w-3xl">
           {topic.description}
         </p>
       </div>
 
-      {/* The 5 Key Mode Cards */}
+      {/* The 6 Key Study Mode Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-10">
-        
         {/* 1. Mapa Mental */}
         <button
           onClick={onOpenMindMap}
-          className="group flex flex-col justify-between p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-indigo-400 dark:hover:border-indigo-600 hover:shadow-lg transition-all text-left"
+          className="group flex flex-col justify-between p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-indigo-400 dark:hover:border-indigo-600 hover:shadow-lg transition-all text-left shadow-xs"
         >
           <div>
             <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
@@ -53,7 +64,7 @@ export const TopicMenu: React.FC<TopicMenuProps> = ({
             <h3 className="text-lg font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
               Hacer mapa mental
             </h3>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
               Visualiza en un diagrama interactivo ramificado todos los conceptos, propiedades y relaciones de este tema.
             </p>
           </div>
@@ -66,7 +77,7 @@ export const TopicMenu: React.FC<TopicMenuProps> = ({
         {/* 2. Resumen */}
         <button
           onClick={onOpenSummary}
-          className="group flex flex-col justify-between p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-emerald-400 dark:hover:border-emerald-600 hover:shadow-lg transition-all text-left"
+          className="group flex flex-col justify-between p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-emerald-400 dark:hover:border-emerald-600 hover:shadow-lg transition-all text-left shadow-xs"
         >
           <div>
             <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
@@ -75,7 +86,7 @@ export const TopicMenu: React.FC<TopicMenuProps> = ({
             <h3 className="text-lg font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
               Hacer resumen
             </h3>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
               Síntesis estructurada con definiciones rigurosas, tablas comparativas, fórmulas indispensables y avisos de examen.
             </p>
           </div>
@@ -88,7 +99,7 @@ export const TopicMenu: React.FC<TopicMenuProps> = ({
         {/* 3. Explicación Extensa */}
         <button
           onClick={() => onOpenExplanation()}
-          className="group flex flex-col justify-between p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-lg transition-all text-left"
+          className="group flex flex-col justify-between p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-lg transition-all text-left shadow-xs"
         >
           <div>
             <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
@@ -97,8 +108,8 @@ export const TopicMenu: React.FC<TopicMenuProps> = ({
             <h3 className="text-lg font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
               Explicación extensa
             </h3>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-              Desarrollo punto por punto con demostraciones completas, deducciones matemáticas y explicaciones detalladas de diapositivas.
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
+              Desarrollo punto por punto con deducciones matemáticas, avisos de cátedra y consultas en vivo al Tutor IA.
             </p>
           </div>
           <div className="mt-6 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-semibold text-blue-600 dark:text-blue-400">
@@ -110,7 +121,7 @@ export const TopicMenu: React.FC<TopicMenuProps> = ({
         {/* 4. Resolver ejercicios juntos */}
         <button
           onClick={onOpenExercises}
-          className="group flex flex-col justify-between p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-amber-400 dark:hover:border-amber-600 hover:shadow-lg transition-all text-left"
+          className="group flex flex-col justify-between p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-amber-400 dark:hover:border-amber-600 hover:shadow-lg transition-all text-left shadow-xs"
         >
           <div>
             <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
@@ -119,12 +130,10 @@ export const TopicMenu: React.FC<TopicMenuProps> = ({
             <h3 className="text-lg font-bold text-slate-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
               Resolver ejercicios juntos
             </h3>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-              {isTSO ? (
-                'En TSO no hay ejercicios numéricos: incluye prácticas de terminal, scripts de shell y catálogo de comandos.'
-              ) : (
-                `Práctica enfocada uno a uno: contador de tiempo individual, soluciones escondidas y revelación al pulsar "He terminado".`
-              )}
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
+              {isTSO
+                ? 'En TSO no hay ejercicios numéricos: incluye prácticas de terminal, scripts de shell y catálogo de comandos.'
+                : 'Práctica enfocada uno a uno: contador de tiempo individual, soluciones escondidas y revelación al pulsar "He terminado".'}
             </p>
           </div>
           <div className="mt-6 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-semibold text-amber-600 dark:text-amber-400">
@@ -133,39 +142,60 @@ export const TopicMenu: React.FC<TopicMenuProps> = ({
           </div>
         </button>
 
-        {/* 5. Simulacro de examen (2 horas) */}
+        {/* 5. Tarjetas de estudio (Flashcards) */}
+        <button
+          onClick={onOpenFlashcards}
+          className="group flex flex-col justify-between p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-violet-400 dark:hover:border-violet-600 hover:shadow-lg transition-all text-left shadow-xs"
+        >
+          <div>
+            <div className="w-12 h-12 rounded-xl bg-violet-50 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+              <Layers className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
+              Tarjetas de estudio (Flashcards)
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
+              Autoevaluación y memorización activa de conceptos y fórmulas. Gira las tarjetas y marca las que ya dominas.
+            </p>
+          </div>
+          <div className="mt-6 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-semibold text-violet-600 dark:text-violet-400">
+            <span>Repasar tarjetas interactivas</span>
+            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </button>
+
+        {/* 6. Simulacro de examen oficial (2 horas) */}
         <button
           onClick={onOpenExam}
-          className="md:col-span-2 lg:col-span-2 group flex flex-col justify-between p-6 rounded-2xl border-2 border-rose-200 dark:border-rose-900/70 bg-gradient-to-r from-rose-50/50 via-white to-orange-50/50 dark:from-rose-950/20 dark:via-slate-900 dark:to-orange-950/20 hover:border-rose-400 dark:hover:border-rose-600 hover:shadow-lg transition-all text-left"
+          className="group flex flex-col justify-between p-6 rounded-2xl border-2 border-rose-200 dark:border-rose-900/70 bg-gradient-to-r from-rose-50/50 via-white to-orange-50/50 dark:from-rose-950/20 dark:via-slate-900 dark:to-orange-950/20 hover:border-rose-400 dark:hover:border-rose-600 hover:shadow-lg transition-all text-left shadow-xs"
         >
           <div>
             <div className="flex items-center justify-between">
               <div className="w-12 h-12 rounded-xl bg-rose-100 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
                 <Timer className="w-6 h-6" />
               </div>
-              <span className="text-xs font-bold px-3 py-1 rounded-full bg-rose-600 text-white shadow-sm flex items-center gap-1.5">
-                <Timer className="w-3.5 h-3.5" />
-                Límite: 2 horas (120 min)
+              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-600 text-white shadow-xs flex items-center gap-1">
+                <Timer className="w-3 h-3" />
+                120 min
               </span>
             </div>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors">
               Simulacro de examen oficial
             </h3>
-            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-2 max-w-xl leading-relaxed">
-              Simula la prueba oficial de este tema: batería de preguntas tipo test de examen de la ETSISI-UPM y problemas complejos con temporizador regresivo de 2 horas y cálculo de calificación final.
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
+              Preguntas tipo test oficiales y problemas prácticos con cronómetro de 2h y nota final sobre 10.
             </p>
           </div>
           <div className="mt-6 pt-3 border-t border-rose-200/60 dark:border-rose-900/60 flex items-center justify-between text-xs font-bold text-rose-600 dark:text-rose-400">
-            <span>Comenzar simulacro de examen</span>
+            <span>Comenzar simulacro (2h)</span>
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </div>
         </button>
-
       </div>
 
       {/* Subtopics Index List */}
-      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
-        <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-xs">
+        <h3 className="text-base font-bold text-slate-900 dark:text-white mb-2">
           Puntos tratados en este tema ({topic.subtopics.length} puntos)
         </h3>
         <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">

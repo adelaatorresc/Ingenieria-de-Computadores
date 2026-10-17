@@ -1,5 +1,6 @@
 import React from 'react';
 import { Topic } from '../types';
+import { MathView } from './MathView';
 import { FileText, Bookmark, CheckCircle2, AlertTriangle, Sparkles, Printer } from 'lucide-react';
 
 interface SummaryViewProps {
@@ -69,9 +70,9 @@ export const SummaryView: React.FC<SummaryViewProps> = ({
                   {subtopic.keyFormulas.map((formula, fIdx) => (
                     <div
                       key={fIdx}
-                      className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 font-mono text-xs text-indigo-950 dark:text-indigo-200 border border-slate-200/80 dark:border-slate-700/80 overflow-x-auto"
+                      className="p-3 rounded-xl bg-indigo-50/70 dark:bg-slate-800/60 font-mono text-xs text-indigo-950 dark:text-indigo-200 border border-indigo-200/60 dark:border-slate-700/80 overflow-x-auto shadow-2xs"
                     >
-                      {formula}
+                      <MathView math={formula} block />
                     </div>
                   ))}
                 </div>

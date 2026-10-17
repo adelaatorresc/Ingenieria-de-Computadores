@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { MessageSquare, Send, X, Bot, User, Sparkles, Minimize2, Maximize2, Loader2 } from 'lucide-react';
 import { Subject, Topic } from '../types';
+import { FormattedMarkdownText } from './FormattedMarkdownText';
 
 interface ChatMessage {
   id: string;
@@ -59,6 +60,42 @@ export const AITutorChat: React.FC<AITutorChatProps> = ({
     setIsLoading(true);
 
     try {
+      // 1. Try server-side AI Tutor proxy
+      const apiRes = await fetch('/api/ai-tutor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: userText,
+          topicTitle: currentTopic?.title || 'General',
+          subtopicTitle: currentSubject?.name || 'Ingeniería de Computadores',
+          history: messages.filter((m) => m.id !== 'welcome-msg').map((m) => ({
+            role: m.role,
+            text: m.text
+          }))
+        })
+      });
+
+      if (apiRes.ok) {
+        const data = await apiRes.json();
+        if (data.answer) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `model-${Date.now()}`,
+              role: 'model',
+              text: data.answer,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            }
+          ]);
+          setIsLoading(false);
+          return;
+        }
+      }
+    } catch {
+      // continue to client fallback
+    }
+
+    try {
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY || (window as unknown as { GEMINI_API_KEY?: string }).GEMINI_API_KEY || '';
       
       const systemInstruction = `Eres el Tutor Oficial de Ingeniería de Computadores de la ETSISI - Universidad Politécnica de Madrid (UPM).
@@ -68,7 +105,6 @@ Responde en español de forma pedagógica, rigurosa, clara y estructurada. Si el
 
       if (apiKey) {
         const ai = new GoogleGenAI({ apiKey });
-        // Format history for multi-turn chat
         const contents = messages
           .concat(userMsg)
           .filter((m) => m.id !== 'welcome-msg')
@@ -78,7 +114,7 @@ Responde en español de forma pedagógica, rigurosa, clara y estructurada. Si el
           }));
 
         const response = await ai.models.generateContent({
-          model: 'models/gemini-3.8-flash',
+          model: 'gemini-3.8-flash',
           contents,
           config: {
             systemInstruction
@@ -96,7 +132,9 @@ Responde en español de forma pedagógica, rigurosa, clara y estructurada. Si el
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           }
         ]);
-      } else {
+        setIsLoading(false);
+        return;
+      }
         // High-quality contextual offline response when API key is not configured in client environment
         setTimeout(() => {
           let contextualAnswer = `Respecto a tu consulta sobre "${userText}": En el contexto de ${currentSubject?.name || 'Ingeniería de Computadores'}, te recomiendo seguir el procedimiento oficial establecido en los apuntes: verificar las condiciones previas (dominios/paridad/bases), plantear el sistema de ecuaciones o tabla de verdad correspondiente, y comprobar el resultado por el camino inverso.`;
@@ -118,8 +156,8 @@ Responde en español de forma pedagógica, rigurosa, clara y estructurada. Si el
               timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             }
           ]);
+          setIsLoading(false);
         }, 600);
-      }
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -200,13 +238,17 @@ Responde en español de forma pedagógica, rigurosa, clara y estructurada. Si el
                 )}
                 
                 <div
-                  className={`p-3.5 rounded-2xl max-w-[82%] whitespace-pre-line ${
+                  className={`p-3.5 rounded-2xl max-w-[85%] ${
                     m.role === 'user'
-                      ? 'bg-indigo-600 text-white rounded-br-xs'
+                      ? 'bg-indigo-600 text-white rounded-br-xs whitespace-pre-line'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-bl-xs border border-slate-200/80 dark:border-slate-700/80'
                   }`}
                 >
-                  <p>{m.text}</p>
+                  {m.role === 'model' ? (
+                    <FormattedMarkdownText content={m.text} />
+                  ) : (
+                    <p>{m.text}</p>
+                  )}
                   <span className={`block text-[10px] mt-1 text-right ${m.role === 'user' ? 'text-indigo-200' : 'text-slate-400'}`}>
                     {m.timestamp}
                   </span>

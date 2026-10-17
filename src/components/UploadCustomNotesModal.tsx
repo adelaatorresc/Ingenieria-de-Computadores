@@ -1,6 +1,20 @@
 import React, { useState } from 'react';
-import { Course, CourseId, SemesterId, Subject, Topic, SubTopic, Exercise } from '../types';
-import { Upload, FileText, CheckCircle2, Sparkles, X, AlertCircle, Plus, BookOpen } from 'lucide-react';
+import { Course, CourseId, SemesterId, Subject, Topic, SubTopic, Exercise, UploadedDocument } from '../types';
+import {
+  Upload,
+  FileText,
+  CheckCircle2,
+  Sparkles,
+  X,
+  AlertCircle,
+  Plus,
+  BookOpen,
+  Eye,
+  Columns2,
+  Trash2,
+  FileQuestion,
+  Download
+} from 'lucide-react';
 
 interface UploadCustomNotesModalProps {
   courses: Course[];
@@ -8,6 +22,10 @@ interface UploadCustomNotesModalProps {
   onClose: () => void;
   onSaveNewTopic: (courseId: CourseId, semesterId: SemesterId, subjectId: string, newTopic: Topic) => void;
   onAddSubtopicsToExistingTopic: (courseId: CourseId, semesterId: SemesterId, subjectId: string, topicId: string, newSubtopics: SubTopic[], newExercises: Exercise[]) => void;
+  uploadedDocuments?: UploadedDocument[];
+  onSaveDocument?: (doc: UploadedDocument) => void;
+  onDeleteDocument?: (docId: string) => void;
+  onOpenDocument?: (doc: UploadedDocument) => void;
 }
 
 export const UploadCustomNotesModal: React.FC<UploadCustomNotesModalProps> = ({
@@ -15,77 +33,138 @@ export const UploadCustomNotesModal: React.FC<UploadCustomNotesModalProps> = ({
   isOpen,
   onClose,
   onSaveNewTopic,
-  onAddSubtopicsToExistingTopic
+  onAddSubtopicsToExistingTopic,
+  uploadedDocuments = [],
+  onSaveDocument,
+  onDeleteDocument,
+  onOpenDocument
 }) => {
+  const [activeTab, setActiveTab] = useState<'upload' | 'my_docs'>('upload');
+
   const [selectedCourseId, setSelectedCourseId] = useState<CourseId>('1');
   const [selectedSemesterId, setSelectedSemesterId] = useState<SemesterId>('1');
-  
-  const currentCourse = courses.find(c => c.id === selectedCourseId) || courses[0];
-  const currentSemester = currentCourse.semesters.find(s => s.id === selectedSemesterId) || currentCourse.semesters[0];
-  
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string>(currentSemester.subjects[0]?.id || '');
-  const currentSubject = currentSemester.subjects.find(s => s.id === selectedSubjectId) || currentSemester.subjects[0];
+
+  const currentCourse = courses.find((c) => c.id === selectedCourseId) || courses[0];
+  const currentSemester =
+    currentCourse.semesters.find((s) => s.id === selectedSemesterId) || currentCourse.semesters[0];
+
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>(
+    currentSemester.subjects[0]?.id || ''
+  );
+  const currentSubject =
+    currentSemester.subjects.find((s) => s.id === selectedSubjectId) || currentSemester.subjects[0];
 
   const [topicMode, setTopicMode] = useState<'new' | 'existing'>('new');
   const [selectedTopicId, setSelectedTopicId] = useState<string>(currentSubject?.topics[0]?.id || '');
-  
+
   // New topic metadata
-  const [newTopicNumber, setNewTopicNumber] = useState<number>((currentSubject?.topics.length || 0) + 1);
+  const [newTopicNumber, setNewTopicNumber] = useState<number>(
+    (currentSubject?.topics.length || 0) + 1
+  );
   const [newTopicTitle, setNewTopicTitle] = useState<string>('');
   const [newTopicSubtitle, setNewTopicSubtitle] = useState<string>('');
-  
+
   // Content input
-  const [inputMethod, setInputMethod] = useState<'text' | 'file'>('text');
+  const [inputMethod, setInputMethod] = useState<'text' | 'file'>('file');
   const [pastedContent, setPastedContent] = useState<string>('');
-  const [uploadedFileName, setUploadedFileName] = useState<string>('');
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedFileDataUrl, setUploadedFileDataUrl] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  // Handle file reading
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle file selection
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setUploadedFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      setPastedContent(text || '');
-    };
-    reader.readAsText(file);
+    setUploadedFile(file);
+    if (!newTopicTitle) {
+      setNewTopicTitle(file.name.replace(/\.[^/.]+$/, ''));
+    }
+
+    const isPdf = file.type === 'application/pdf' || file.name.endsWith('.pdf');
+    const isImage = file.type.startsWith('image/');
+
+    if (isPdf || isImage) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = ev.target?.result as string;
+        setUploadedFileDataUrl(dataUrl);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      // Text or markdown
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const text = ev.target?.result as string;
+        setPastedContent(text || '');
+      };
+      reader.readAsText(file);
+    }
   };
 
-  // Automated intelligent parser to turn user notes into rich topics
-  const handleProcessAndSave = () => {
-    if (!pastedContent.trim() && !newTopicTitle.trim()) {
-      alert('Por favor, introduce el título del tema o el contenido de los apuntes.');
-      return;
-    }
+  // Save document and/or generate topic
+  const handleSaveDocumentAndTopic = () => {
+    const title = newTopicTitle.trim() || uploadedFile?.name || 'Apuntes de clase';
 
     setIsProcessing(true);
 
     setTimeout(() => {
-      const rawText = pastedContent.trim();
-      const lines = rawText.split('\n').filter(l => l.trim().length > 0);
+      // 1. Create UploadedDocument entity
+      let newDoc: UploadedDocument | null = null;
+      if (uploadedFile) {
+        const isPdf = uploadedFile.type === 'application/pdf' || uploadedFile.name.endsWith('.pdf');
+        const isImg = uploadedFile.type.startsWith('image/');
+        newDoc = {
+          id: `doc-${Date.now()}`,
+          name: title,
+          fileType: isPdf ? 'pdf' : isImg ? 'image' : 'text',
+          dataUrl: uploadedFileDataUrl || undefined,
+          textContent: pastedContent || (isPdf ? undefined : 'Documento cargado'),
+          courseId: selectedCourseId,
+          semesterId: selectedSemesterId,
+          subjectId: selectedSubjectId,
+          uploadedAt: new Date().toISOString(),
+          sizeBytes: uploadedFile.size
+        };
+      } else if (pastedContent.trim()) {
+        newDoc = {
+          id: `doc-${Date.now()}`,
+          name: title,
+          fileType: 'markdown',
+          textContent: pastedContent,
+          courseId: selectedCourseId,
+          semesterId: selectedSemesterId,
+          subjectId: selectedSubjectId,
+          uploadedAt: new Date().toISOString(),
+          sizeBytes: pastedContent.length
+        };
+      }
 
-      // Extract or synthesize subtopics by splitting on headers or numbering
+      if (newDoc && onSaveDocument) {
+        onSaveDocument(newDoc);
+      }
+
+      // 2. Synthesize topic structure for flashcards and exercises
+      const rawText = pastedContent.trim() || `Contenido de ${title}`;
+      const lines = rawText.split('\n').filter((l) => l.trim().length > 0);
       const generatedSubtopics: SubTopic[] = [];
       const generatedExercises: Exercise[] = [];
 
-      // Split content into chunks
-      const paragraphs = rawText.split(/\n\s*\n/).filter(p => p.trim().length > 0);
+      const paragraphs = rawText.split(/\n\s*\n/).filter((p) => p.trim().length > 0);
 
-      if (paragraphs.length <= 1 && lines.length > 0) {
-        // Simple structure
+      if (paragraphs.length <= 1) {
         generatedSubtopics.push({
           id: `custom-sub-${Date.now()}-1`,
-          title: `1. Contenido Principal: ${newTopicTitle || 'Fundamentos'}`,
-          summary: lines.slice(0, 3).join(' ').substring(0, 220) + '...',
+          title: `1. Contenido de ${title}`,
+          summary: lines.slice(0, 3).join(' ').substring(0, 220) || `Estudio de ${title}`,
           explanation: rawText,
-          keyFormulas: lines.filter(l => l.includes('=') || l.includes('->') || l.includes('+')).slice(0, 4),
-          examTips: ['Revisar la definición rigurosa y las demostraciones del teorema.']
+          keyFormulas: lines
+            .filter((l) => l.includes('=') || l.includes('->') || l.includes('+'))
+            .slice(0, 4),
+          examTips: ['Revisar la definición rigurosa y las deducciones teóricas.']
         });
       } else {
         paragraphs.forEach((p, idx) => {
@@ -98,62 +177,79 @@ export const UploadCustomNotesModal: React.FC<UploadCustomNotesModalProps> = ({
             title: `${idx + 1}. ${pTitle}`,
             summary: pBody.substring(0, 200) + (pBody.length > 200 ? '...' : ''),
             explanation: pBody || p,
-            keyFormulas: pLines.filter(l => l.includes('=') || l.includes('=>') || l.includes('->')).slice(0, 3)
+            keyFormulas: pLines
+              .filter((l) => l.includes('=') || l.includes('=>') || l.includes('->'))
+              .slice(0, 3)
           });
         });
       }
 
-      // Generate a practical exercise from the notes
       generatedExercises.push({
         id: `custom-ej-${Date.now()}-1`,
-        title: `Ejercicio Práctico 1: Aplicación de ${newTopicTitle || 'los conceptos'}`,
+        title: `Ejercicio Práctico 1: Aplicación de ${title}`,
         difficulty: 'medio',
-        statement: `A partir de los apuntes introducidos sobre "${newTopicTitle || 'este tema'}", resuelve y justifica la aplicación práctica de los conceptos explicados en el Punto 1.`,
-        hints: ['Revisa la definición inicial y aplica las propiedades explicadas.'],
+        statement: `A partir del documento "${title}", analiza los supuestos de partida y justifica la resolución formal del problema.`,
+        hints: ['Revisa las propiedades descritas en los apuntes.'],
         solution: {
-          finalAnswer: 'Solución justificada según los apuntes introducidos.',
+          finalAnswer: 'Solución justificada según el material de estudio.',
           stepByStep: [
-            '1. Identificar los datos iniciales y las hipótesis dadas en el enunciado.',
-            '2. Aplicar la definición o fórmula fundamental descrita en la teoría.',
-            '3. Concluir verificando la consistencia dimensional y matemática del resultado.'
+            '1. Extraer los datos iniciales y teoremas aplicables.',
+            '2. Realizar los cálculos algebraicos y simplificaciones paso a paso.',
+            '3. Comprobar la validez del resultado final.'
           ],
-          theoreticalNote: 'Generado automáticamente a partir de los apuntes subidos por el alumno.'
+          theoreticalNote: 'Generado a partir del documento subido por el alumno.'
         }
       });
 
       if (topicMode === 'new') {
-        const createdTopic: Topic = {
-          id: `topic-custom-${Date.now()}`,
-          number: newTopicNumber || (currentSubject.topics.length + 1),
-          title: newTopicTitle || `Tema ${newTopicNumber}: Apuntes Incorporados`,
-          subtitle: newTopicSubtitle || 'Tema personalizado añadido por el estudiante',
-          description: `Unidad creada a partir de los apuntes y documentos cargados en la web. Incluye ${generatedSubtopics.length} puntos explicados y ejercicios generados.`,
+        const newTopic: Topic = {
+          id: `custom-topic-${Date.now()}`,
+          number: newTopicNumber,
+          title: `Tema ${newTopicNumber}: ${title}`,
+          description: newTopicSubtitle.trim() || `Material personalizado de ${title}`,
           subtopics: generatedSubtopics,
+          summaryPoints: [
+            `Definición y marco teórico de ${title}.`,
+            'Procedimiento y fórmulas esenciales de evaluación.',
+            'Criterios de corrección de la ETSISI.'
+          ],
+          mindMapNodes: [
+            {
+              id: 'node-root',
+              label: title,
+              type: 'root',
+              children: generatedSubtopics.map((s, idx) => ({
+                id: `node-sub-${idx}`,
+                label: s.title,
+                type: 'concept'
+              }))
+            }
+          ],
           exercises: generatedExercises,
           examQuestions: [
             {
-              id: `q-custom-${Date.now()}-1`,
-              question: `Respecto a los contenidos de ${newTopicTitle || 'este tema'}, ¿cuál es la propiedad principal estudiada?`,
+              id: `custom-q-${Date.now()}-1`,
+              question: `¿Cuál es el principio fundamental demostrado en "${title}"?`,
               options: [
-                'La definición y condiciones establecidas en los apuntes',
-                'Ninguna de las propiedades es aplicable',
-                'Solo es válida en casos triviales',
-                'Requiere suposiciones adicionales no contempladas'
+                'La deducción formal y sus condiciones de frontera.',
+                'La aplicación directa sin verificar hipótesis previas.',
+                'Un método exclusivamente empírico no aplicable en examen.',
+                'Ninguna de las anteriores.'
               ],
               correctIndex: 0,
-              explanation: 'Justificado directamente por la teoría introducida en este tema.',
-              points: 2
+              explanation: 'En las evaluaciones oficiales de la ETSISI es obligatorio justificar las hipótesis previas.',
+              points: 2.5
             }
           ],
-          practicalExamProblems: []
+          practicalExamProblems: generatedExercises
         };
 
-        onSaveNewTopic(selectedCourseId, selectedSemesterId, currentSubject.id, createdTopic);
+        onSaveNewTopic(selectedCourseId, selectedSemesterId, selectedSubjectId, newTopic);
       } else {
         onAddSubtopicsToExistingTopic(
           selectedCourseId,
           selectedSemesterId,
-          currentSubject.id,
+          selectedSubjectId,
           selectedTopicId,
           generatedSubtopics,
           generatedExercises
@@ -161,70 +257,170 @@ export const UploadCustomNotesModal: React.FC<UploadCustomNotesModalProps> = ({
       }
 
       setIsProcessing(false);
-      setSuccessMessage('¡Apuntes y tema guardados con éxito! Ya puedes explorar sus mapas mentales, resúmenes y ejercicios.');
+      setSuccessMessage(`¡Documento guardado con éxito! Se ha indexado en ${currentSubject.name}.`);
+
       setTimeout(() => {
-        setSuccessMessage(null);
         onClose();
-      }, 1800);
+        if (newDoc && onOpenDocument) {
+          onOpenDocument(newDoc);
+        }
+      }, 1200);
     }, 600);
   };
 
+  // Filter documents for current subject
+  const currentSubjectDocs = uploadedDocuments.filter(
+    (d) => d.courseId === selectedCourseId && d.subjectId === selectedSubjectId
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-8 relative my-8">
-        
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-6 right-6 p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
+      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 sm:p-8 my-8 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+        {/* Header */}
+        <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/30">
+              <Upload className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                Gestor de Apuntes y Documentos Oficiales
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Sube PDFs o texto, léelos en visor integrado y consúltalos con el Tutor IA en pantalla dividida.
+              </p>
+            </div>
+          </div>
 
-        {/* Modal Header */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-11 h-11 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
-            <Upload className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-              Subir Apuntes / Crear Nuevo Tema
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Guarda material propio en cualquier asignatura del Grado (generando mapas, resúmenes y ejercicios).
-            </p>
-          </div>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        {successMessage ? (
-          <div className="p-8 text-center space-y-3">
-            <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-8 h-8" />
-            </div>
-            <h3 className="text-lg font-bold text-emerald-900 dark:text-emerald-200">
-              {successMessage}
-            </h3>
+        {/* Tab switchers */}
+        <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl mb-6 text-xs font-bold">
+          <button
+            onClick={() => setActiveTab('upload')}
+            className={`flex-1 py-2 rounded-lg transition-all cursor-pointer ${
+              activeTab === 'upload'
+                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400'
+            }`}
+          >
+            Subir nuevo archivo / apunte
+          </button>
+          <button
+            onClick={() => setActiveTab('my_docs')}
+            className={`flex-1 py-2 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              activeTab === 'my_docs'
+                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400'
+            }`}
+          >
+            <span>Mis documentos ({uploadedDocuments.length})</span>
+            {uploadedDocuments.length > 0 && (
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            )}
+          </button>
+        </div>
+
+        {/* Tab: My Saved Documents */}
+        {activeTab === 'my_docs' ? (
+          <div className="space-y-4">
+            {uploadedDocuments.length === 0 ? (
+              <div className="text-center p-8 border border-dashed border-slate-300 dark:border-slate-700 rounded-2xl">
+                <FileQuestion className="w-12 h-12 text-slate-400 mx-auto mb-2" />
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  No tienes documentos subidos todavía
+                </p>
+                <p className="text-[11px] text-slate-400 mt-1 mb-4">
+                  Sube apuntes de tus profesores, PDFs de clase o problemas para consultarlos en pantalla dividida.
+                </p>
+                <button
+                  onClick={() => setActiveTab('upload')}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold cursor-pointer"
+                >
+                  Subir primer apunte
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2.5 max-h-96 overflow-y-auto p-1">
+                {uploadedDocuments.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-3 shadow-2xs hover:border-indigo-300 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                        {doc.fileType}
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                          {doc.name}
+                        </h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          {doc.courseId}º Curso ({doc.semesterId}º Semestre) · {Math.round(doc.sizeBytes / 1024)} KB
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {onOpenDocument && (
+                        <button
+                          onClick={() => {
+                            onClose();
+                            onOpenDocument(doc);
+                          }}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                          title="Abrir en visor con Tutor IA en pantalla dividida"
+                        >
+                          <Columns2 className="w-3.5 h-3.5" />
+                          <span>Ver en pantalla dividida</span>
+                        </button>
+                      )}
+
+                      {onDeleteDocument && (
+                        <button
+                          onClick={() => {
+                            if (confirm(`¿Eliminar documento "${doc.name}"?`)) {
+                              onDeleteDocument(doc.id);
+                            }
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg transition-colors cursor-pointer"
+                          title="Eliminar documento"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
-          <div className="space-y-5 text-xs sm:text-sm">
-            
-            {/* 1. Selector de Curso y Semestre */}
-            <div className="grid grid-cols-2 gap-3">
+          /* Tab: Upload New Document */
+          <div className="space-y-4">
+            {successMessage && (
+              <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>{successMessage}</span>
+              </div>
+            )}
+
+            {/* Select Destination Subject */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  1. Curso:
+                  Curso
                 </label>
                 <select
                   value={selectedCourseId}
-                  onChange={(e) => {
-                    const cId = e.target.value as CourseId;
-                    setSelectedCourseId(cId);
-                    const c = courses.find(item => item.id === cId);
-                    if (c && c.semesters[0]?.subjects[0]) {
-                      setSelectedSubjectId(c.semesters[0].subjects[0].id);
-                    }
-                  }}
-                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium"
+                  onChange={(e) => setSelectedCourseId(e.target.value as CourseId)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold"
                 >
                   <option value="1">1.º Curso</option>
                   <option value="2">2.º Curso</option>
@@ -235,208 +431,128 @@ export const UploadCustomNotesModal: React.FC<UploadCustomNotesModalProps> = ({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  2. Semestre:
+                  Semestre
                 </label>
                 <select
                   value={selectedSemesterId}
-                  onChange={(e) => {
-                    const sId = e.target.value as SemesterId;
-                    setSelectedSemesterId(sId);
-                    const s = currentCourse.semesters.find(item => item.id === sId);
-                    if (s && s.subjects[0]) {
-                      setSelectedSubjectId(s.subjects[0].id);
-                    }
-                  }}
-                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium"
+                  onChange={(e) => setSelectedSemesterId(e.target.value as SemesterId)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold"
                 >
-                  <option value="1">1.º Semestre</option>
+                  <option value="1">1.er Semestre</option>
                   <option value="2">2.º Semestre</option>
                 </select>
               </div>
-            </div>
 
-            {/* 2. Asignatura */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                3. Asignatura:
-              </label>
-              <select
-                value={selectedSubjectId}
-                onChange={(e) => setSelectedSubjectId(e.target.value)}
-                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium"
-              >
-                {currentSemester.subjects.map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.shortName}) - Cód. {s.code}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* 3. Modo de Tema: Nuevo tema o Añadir a tema existente */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
-                4. Destino de los apuntes:
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTopicMode('new')}
-                  className={`p-3 rounded-xl border text-left font-semibold transition-all ${
-                    topicMode === 'new'
-                      ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 ring-1 ring-indigo-500'
-                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400'
-                  }`}
-                >
-                  <p className="flex items-center gap-1.5">
-                    <Plus className="w-4 h-4 text-indigo-600" />
-                    <span>Crear un nuevo Tema</span>
-                  </p>
-                  <p className="text-[11px] font-normal text-slate-500 mt-1">
-                    Crea una nueva unidad didáctica completa.
-                  </p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setTopicMode('existing')}
-                  disabled={!currentSubject || currentSubject.topics.length === 0}
-                  className={`p-3 rounded-xl border text-left font-semibold transition-all ${
-                    topicMode === 'existing'
-                      ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 ring-1 ring-indigo-500'
-                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-slate-600 dark:text-slate-400 disabled:opacity-50'
-                  }`}
-                >
-                  <p className="flex items-center gap-1.5">
-                    <BookOpen className="w-4 h-4 text-indigo-600" />
-                    <span>Añadir a Tema Existente</span>
-                  </p>
-                  <p className="text-[11px] font-normal text-slate-500 mt-1">
-                    Incorpora nuevos puntos a un tema actual.
-                  </p>
-                </button>
-              </div>
-            </div>
-
-            {/* If New Topic, ask for Title and Number */}
-            {topicMode === 'new' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    Número de Tema:
-                  </label>
-                  <input
-                    type="number"
-                    value={newTopicNumber}
-                    onChange={(e) => setNewTopicNumber(parseInt(e.target.value) || 1)}
-                    className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                    Título del Tema:
-                  </label>
-                  <input
-                    type="text"
-                    value={newTopicTitle}
-                    onChange={(e) => setNewTopicTitle(e.target.value)}
-                    placeholder="Ej. Grafos y Algoritmos de Dijkstra"
-                    className="w-full p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-semibold"
-                  />
-                </div>
-              </div>
-            ) : (
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Selecciona el tema al que añadir los apuntes:
+                  Asignatura
                 </label>
                 <select
-                  value={selectedTopicId}
-                  onChange={(e) => setSelectedTopicId(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium"
+                  value={selectedSubjectId}
+                  onChange={(e) => setSelectedSubjectId(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold truncate"
                 >
-                  {currentSubject.topics.map(t => (
-                    <option key={t.id} value={t.id}>
-                      {t.title}
+                  {currentSemester.subjects.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.shortName})
                     </option>
                   ))}
                 </select>
               </div>
-            )}
-
-            {/* Input Method Toggle */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  5. Contenido de los apuntes:
-                </label>
-                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <button
-                    type="button"
-                    onClick={() => setInputMethod('text')}
-                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                      inputMethod === 'text'
-                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
-                        : 'text-slate-500'
-                    }`}
-                  >
-                    Pegar texto / HTML
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setInputMethod('file')}
-                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
-                      inputMethod === 'file'
-                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
-                        : 'text-slate-500'
-                    }`}
-                  >
-                    Subir archivo
-                  </button>
-                </div>
-              </div>
-
-              {inputMethod === 'file' ? (
-                <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-6 text-center bg-slate-50 dark:bg-slate-800/30">
-                  <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                  <p className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                    {uploadedFileName ? `Archivo seleccionado: ${uploadedFileName}` : 'Selecciona o arrastra tu archivo (.txt, .md, .html, .c)'}
-                  </p>
-                  <input
-                    type="file"
-                    accept=".txt,.md,.html,.c,.pdf,.json"
-                    onChange={handleFileUpload}
-                    className="mt-3 text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-indigo-600 file:text-white file:font-semibold cursor-pointer"
-                  />
-                </div>
-              ) : (
-                <textarea
-                  value={pastedContent}
-                  onChange={(e) => setPastedContent(e.target.value)}
-                  placeholder="Pega aquí el contenido de tus apuntes, texto de diapositivas o código HTML..."
-                  rows={6}
-                  className="w-full text-xs font-mono p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              )}
             </div>
 
-            {/* Action Buttons */}
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
+            {/* Title / Name */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                Título del documento o tema
+              </label>
+              <input
+                type="text"
+                value={newTopicTitle}
+                onChange={(e) => setNewTopicTitle(e.target.value)}
+                placeholder="Ej. Apuntes Tema 4: Punteros y Memoria Dinámica"
+                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-medium"
+              />
+            </div>
+
+            {/* Input Method Buttons */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setInputMethod('file')}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                  inputMethod === 'file'
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                }`}
+              >
+                Subir archivo (PDF, Word, TXT, Imagen)
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputMethod('text')}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                  inputMethod === 'text'
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                }`}
+              >
+                Pegar texto o Markdown
+              </button>
+            </div>
+
+            {inputMethod === 'file' ? (
+              <div className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl p-6 text-center hover:border-indigo-400 transition-colors">
+                <FileText className="w-10 h-10 text-indigo-500 mx-auto mb-2" />
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  {uploadedFile ? uploadedFile.name : 'Selecciona o arrastra el archivo aquí'}
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Podrás verlo en el visor de documentos y consultarlo con la IA en pantalla dividida.
+                </p>
+                <label className="inline-flex items-center gap-1.5 px-4 py-2 mt-3 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-xs font-bold hover:bg-indigo-100 transition-colors cursor-pointer">
+                  <span>Examinar equipo</span>
+                  <input
+                    type="file"
+                    accept=".pdf,.txt,.md,image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            ) : (
+              <textarea
+                rows={5}
+                value={pastedContent}
+                onChange={(e) => setPastedContent(e.target.value)}
+                placeholder="Pega aquí el contenido de los apuntes, teoremas, fórmulas o enunciados de prácticas..."
+                className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            )}
+
+            {/* Action Save Button */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-50"
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="button"
-                disabled={isProcessing}
-                onClick={handleProcessAndSave}
-                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center gap-2 disabled:opacity-50"
+                disabled={isProcessing || (!uploadedFile && !pastedContent.trim())}
+                onClick={handleSaveDocumentAndTopic}
+                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold shadow-md shadow-indigo-600/30 transition-all flex items-center gap-2 cursor-pointer"
               >
-                <Sparkles className="w-4 h-4" />
-                <span>{isProcessing ? 'Generando resúmenes y mapas...' : 'Guardar y Generar Tema'}</span>
+                {isProcessing ? (
+                  <span>Guardando e indexando...</span>
+                ) : (
+                  <>
+                    <Columns2 className="w-4 h-4" />
+                    <span>Guardar y abrir en pantalla dividida</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
