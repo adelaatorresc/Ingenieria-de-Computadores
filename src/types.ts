@@ -54,52 +54,7 @@ export interface ExamEvent {
   score?: number;
 }
 
-export interface RoomPomodoroState {
-  isRunning: boolean;
-  mode: 'work' | 'short_break' | 'long_break';
-  timeLeftSeconds: number;
-  totalDurationSeconds: number;
-  lastUpdatedTimestamp: number;
-  startedByName: string;
-}
 
-export interface StudyRoomNote {
-  id: string;
-  authorId: string;
-  authorName: string;
-  authorAvatarColor?: string;
-  tag: 'Fórmula' | 'Tip Examen' | 'Código C' | 'Resumen' | 'Duda Resuelta';
-  title: string;
-  content: string;
-  createdAt: string;
-  likes: number;
-}
-
-export interface StudyRoomMessage {
-  id: string;
-  authorId: string;
-  authorName: string;
-  text: string;
-  timestamp: string;
-  isAiResponse?: boolean;
-}
-
-export interface StudyRoom {
-  id: string;
-  name: string;
-  subjectId: string;
-  subjectName: string;
-  courseId: CourseId;
-  semesterId: SemesterId;
-  description: string;
-  topicFocus: string;
-  activeMembersCount: number;
-  createdBy: string;
-  createdAt: string;
-  pomodoro: RoomPomodoroState;
-  notes: StudyRoomNote[];
-  messages: StudyRoomMessage[];
-}
 
 export interface StudyDaySchedule {
   dayNumber: number;
@@ -206,6 +161,8 @@ export interface Topic {
     points: number;
   }[];
   practicalExamProblems: Exercise[];
+  summaryPoints?: string[];
+  mindMapNodes?: any[];
 }
 
 export interface Subject {
@@ -235,7 +192,8 @@ export interface UploadedDocument {
   id: string;
   name: string;
   fileType: 'pdf' | 'text' | 'markdown' | 'image';
-  dataUrl?: string; // base64 data for PDF or images
+  dataUrl?: string; // base64 data for fallback
+  fileUrl?: string; // direct HTTP URL from server e.g. /api/documents/:id/file
   textContent?: string;
   courseId: CourseId;
   semesterId: SemesterId;
@@ -266,7 +224,6 @@ export type ViewMode =
   | 'exam_calendar'
   | 'study_planner'
   | 'ai_exam_simulator'
-  | 'study_groups'
   | 'document_viewer';
 
 export interface NavState {

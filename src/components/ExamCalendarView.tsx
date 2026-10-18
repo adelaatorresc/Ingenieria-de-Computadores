@@ -234,7 +234,7 @@ export const ExamCalendarView: React.FC<ExamCalendarViewProps> = ({
   const handleConfirmImportParsedExams = () => {
     const toImport = parsedExamsPreview.filter((ex) => selectedParsedIds[ex.id]);
     if (toImport.length === 0) {
-      alert('Selecciona al menos un examen para importar.');
+      setParseError('Selecciona al menos un examen para importar de la lista.');
       return;
     }
 
@@ -246,9 +246,7 @@ export const ExamCalendarView: React.FC<ExamCalendarViewProps> = ({
   };
 
   const handleDeleteExam = (id: string) => {
-    if (confirm('¿Eliminar este examen de tu calendario?')) {
-      onUpdateExams(exams.filter((e) => e.id !== id));
-    }
+    onUpdateExams(exams.filter((e) => e.id !== id));
   };
 
   const handleToggleCompleted = (id: string) => {

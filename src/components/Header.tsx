@@ -23,7 +23,9 @@ import {
   Target,
   Flame,
   Zap,
-  Users
+  Cloud,
+  CloudOff,
+  FileText
 } from 'lucide-react';
 import { NavState, UserProfile } from '../types';
 
@@ -43,11 +45,11 @@ interface HeaderProps {
   onOpenAuth?: () => void;
   onOpenCalendar?: () => void;
   onOpenStudyPlanner?: () => void;
-  onOpenStudyGroups?: () => void;
   user?: UserProfile | null;
   subjectTitle?: string;
   topicTitle?: string;
   exerciseTitle?: string;
+  onSelectCourse?: (courseId: any) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -56,6 +58,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleDarkMode,
   onBack,
   onGoHome,
+  onSelectCourse,
   onOpenAnalytics,
   onOpenUploadNotes,
   onOpenPomodoro,
@@ -66,7 +69,6 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAuth,
   onOpenCalendar,
   onOpenStudyPlanner,
-  onOpenStudyGroups,
   user,
   subjectTitle,
   topicTitle,
@@ -113,9 +115,15 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Context breadcrumb trail */}
             {subjectTitle && (
               <div className="hidden md:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 truncate pl-3 border-l border-slate-200 dark:border-slate-800">
-                <span className="font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">
-                  {subjectTitle}
-                </span>
+                <button
+                  onClick={() => onSelectCourse?.(nav.courseId || '1')}
+                  className="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap cursor-pointer flex items-center gap-1"
+                  title="Cambiar a otra asignatura"
+                >
+                  <span>Asignaturas</span>
+                  <span>›</span>
+                  <span className="text-slate-800 dark:text-slate-200 font-bold">{subjectTitle}</span>
+                </button>
                 {topicTitle && (
                   <>
                     <span className="text-slate-300 dark:text-slate-600">/</span>
@@ -138,6 +146,16 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Zone 2: Navigation Info / Indicator */}
           <div className="hidden lg:flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+            {nav.view !== 'courses' && nav.view !== 'welcome' && (
+              <button
+                onClick={() => onSelectCourse?.(nav.courseId || '1')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-bold hover:bg-indigo-100 transition-colors cursor-pointer shadow-2xs"
+                title="Volver a elegir otra asignatura"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span>Elegir otra asignatura</span>
+              </button>
+            )}
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 font-medium text-slate-700 dark:text-slate-300">
               <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
               {nav.courseId ? `${nav.courseId}º Curso` : 'Plan 61CI'}
@@ -204,19 +222,32 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Quick Study Groups Button */}
-            {onOpenStudyGroups && (
+            {/* Cloud Sync Status Indicator & Button */}
+            {onOpenAuth && (
               <button
-                onClick={onOpenStudyGroups}
+                onClick={onOpenAuth}
                 className={`hidden md:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                  nav.view === 'study_groups'
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                  user?.isRegistered
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                    : 'bg-indigo-50/80 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100'
                 }`}
-                title="Grupos de Estudio Virtuales (Salas y Pomodoro sincrónico)"
+                title={
+                  user?.isRegistered
+                    ? 'Sincronización activa con ordenador, tablet y móvil'
+                    : 'Inicia sesión para sincronizar automáticamente entre dispositivos'
+                }
               >
-                <Users className="w-4 h-4 text-indigo-500" />
-                <span>Salas Estudio</span>
+                {user?.isRegistered ? (
+                  <>
+                    <Cloud className="w-4 h-4 text-emerald-500" />
+                    <span>Sincronizado</span>
+                  </>
+                ) : (
+                  <>
+                    <CloudOff className="w-4 h-4 text-indigo-500" />
+                    <span>Sincronizar</span>
+                  </>
+                )}
               </button>
             )}
 
@@ -316,6 +347,23 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
 
               <div className="space-y-2">
+                {/* 0. Select Another Subject */}
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onSelectCourse?.(nav.courseId || '1');
+                  }}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-950/40 hover:bg-indigo-100 text-slate-800 dark:text-slate-200 text-xs font-medium transition-colors text-left cursor-pointer"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0">
+                    <BookOpen className="w-3.5 h-3.5" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900 dark:text-white">Elegir otra asignatura</p>
+                    <p className="text-[11px] text-slate-500">Volver al plan de estudios (1.º - 4.º curso)</p>
+                  </div>
+                </button>
+
                 {/* 1. Return to Welcome Screen */}
                 <button
                   onClick={() => {
@@ -324,7 +372,7 @@ export const Header: React.FC<HeaderProps> = ({
                   }}
                   className="w-full flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-800 dark:text-slate-200 text-xs font-medium transition-colors text-left"
                 >
-                  <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0">
+                  <div className="w-7 h-7 rounded-lg bg-slate-700 text-white flex items-center justify-center shrink-0">
                     <Home className="w-3.5 h-3.5" />
                   </div>
                   <div>
@@ -414,26 +462,30 @@ export const Header: React.FC<HeaderProps> = ({
                   </button>
                 )}
 
-                {/* Study Groups */}
-                {onOpenStudyGroups && (
+                {/* Cloud Sync in drawer */}
+                {onOpenAuth && (
                   <button
                     onClick={() => {
                       setMenuOpen(false);
-                      onOpenStudyGroups();
+                      onOpenAuth();
                     }}
-                    className="w-full flex items-center gap-3 p-3 rounded-xl border border-indigo-200/80 dark:border-indigo-900/50 bg-indigo-50/40 dark:bg-indigo-950/20 hover:bg-indigo-100/50 text-slate-800 dark:text-slate-200 text-xs font-medium transition-colors text-left cursor-pointer"
+                    className="w-full flex items-center gap-3 p-3 rounded-xl border border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/40 dark:bg-emerald-950/20 hover:bg-emerald-100/50 text-slate-800 dark:text-slate-200 text-xs font-medium transition-colors text-left cursor-pointer"
                   >
-                    <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0">
-                      <Users className="w-3.5 h-3.5" />
+                    <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                      <Cloud className="w-3.5 h-3.5" />
                     </div>
                     <div>
                       <p className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                        <span>Grupos de Estudio Virtuales</span>
-                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-600 text-white font-semibold">
-                          En vivo
+                        <span>Sincronización Multidispositivo</span>
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-600 text-white font-semibold">
+                          {user?.isRegistered ? 'Activa' : 'Conectar'}
                         </span>
                       </p>
-                      <p className="text-[11px] text-slate-500">Salas por asignatura, Pomodoro sincronizado y apuntes</p>
+                      <p className="text-[11px] text-slate-500">
+                        {user?.isRegistered
+                          ? 'Sincronizado entre PC, tablet y móvil'
+                          : 'Inicia sesión con tu cuenta para sincronizar'}
+                      </p>
                     </div>
                   </button>
                 )}

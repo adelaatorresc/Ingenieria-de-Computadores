@@ -1,5 +1,5 @@
-import React from 'react';
-import { Subject, Topic, UploadedDocument } from '../types';
+import React, { useState } from 'react';
+import { Subject, Topic, UploadedDocument, Course, CourseId, SemesterId } from '../types';
 import {
   BookOpen,
   HelpCircle,
@@ -8,40 +8,130 @@ import {
   ListChecks,
   Timer,
   ArrowRight,
+  ArrowLeft,
   Sparkles,
   Users,
   Bot,
   Columns2,
   Upload,
-  Eye
+  Eye,
+  ChevronDown,
+  ExternalLink
 } from 'lucide-react';
 
 interface SubjectViewProps {
   subject: Subject;
+  courses?: Course[];
   uploadedDocuments?: UploadedDocument[];
   onSelectTopic: (topic: Topic) => void;
   onDirectAction: (topic: Topic, action: 'mindmap' | 'summary' | 'explanation' | 'flashcards' | 'exercises' | 'exam') => void;
-  onOpenStudyGroups?: () => void;
   onOpenAITutor?: () => void;
   onOpenDocument?: (doc: UploadedDocument) => void;
   onOpenUploadModal?: () => void;
+  onGoToCourses?: () => void;
+  onSelectSubject?: (courseId: CourseId, semesterId: SemesterId, subject: Subject) => void;
 }
 
 export const SubjectView: React.FC<SubjectViewProps> = ({
   subject,
+  courses = [],
   uploadedDocuments = [],
   onSelectTopic,
   onDirectAction,
-  onOpenStudyGroups,
   onOpenAITutor,
   onOpenDocument,
-  onOpenUploadModal
+  onOpenUploadModal,
+  onGoToCourses,
+  onSelectSubject
 }) => {
+  const [showSubjectDropdown, setShowSubjectDropdown] = useState(false);
   // Find documents belonging to this subject
   const subjectDocs = uploadedDocuments.filter((d) => d.subjectId === subject.id);
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+      {/* Back to courses / Change subject bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div className="flex items-center gap-2">
+          {onGoToCourses && (
+            <button
+              onClick={onGoToCourses}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 shadow-2xs transition-colors cursor-pointer"
+              title="Volver a la selección de asignaturas"
+            >
+              <ArrowLeft className="w-4 h-4 text-indigo-500" />
+              <span>← Todas las asignaturas</span>
+            </button>
+          )}
+
+          {courses.length > 0 && onSelectSubject && (
+            <div className="relative">
+              <button
+                onClick={() => setShowSubjectDropdown(!showSubjectDropdown)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50/70 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-xs font-bold text-indigo-700 dark:text-indigo-300 transition-colors cursor-pointer"
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Cambiar de asignatura</span>
+                <ChevronDown className="w-3 h-3 text-indigo-500" />
+              </button>
+
+              {showSubjectDropdown && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowSubjectDropdown(false)}
+                  />
+                  <div className="absolute left-0 top-full mt-2 w-72 sm:w-80 max-h-96 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 p-2">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 px-3 py-1.5">
+                      Cambiar de asignatura directamente:
+                    </p>
+                    {courses.map((course) => (
+                      <div key={course.id} className="mb-2">
+                        <div className="text-[10px] font-extrabold uppercase text-indigo-600 dark:text-indigo-400 px-3 py-1">
+                          {course.name}
+                        </div>
+                        {course.semesters.map((sem) => (
+                          <div key={sem.id} className="mb-1">
+                            <div className="text-[9px] font-semibold text-slate-400 px-3 py-0.5">
+                              {sem.name}
+                            </div>
+                            <div className="space-y-0.5">
+                              {sem.subjects.map((sub) => (
+                                <button
+                                  key={sub.id}
+                                  onClick={() => {
+                                    setShowSubjectDropdown(false);
+                                    onSelectSubject(course.id, sem.id, sub);
+                                  }}
+                                  className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors ${
+                                    sub.id === subject.id
+                                      ? 'bg-indigo-600 text-white'
+                                      : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                  }`}
+                                >
+                                  <span className="truncate">{sub.name}</span>
+                                  <span className="text-[10px] opacity-75 font-mono ml-2">
+                                    {sub.code}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        <span className="text-xs text-slate-400 font-medium hidden sm:inline">
+          Plan 61CI · Grado en Ingeniería de Computadores
+        </span>
+      </div>
+
       {/* Subject Header Card */}
       <div className="p-6 sm:p-8 rounded-2xl bg-gradient-to-br from-indigo-900 to-slate-900 text-white shadow-lg mb-8 relative overflow-hidden">
         <div className="absolute right-0 top-0 w-80 h-80 bg-white/5 rounded-full blur-3xl pointer-events-none" />
@@ -70,15 +160,6 @@ export const SubjectView: React.FC<SubjectViewProps> = ({
           </p>
 
           <div className="flex flex-wrap items-center gap-2.5 pt-2">
-            {onOpenStudyGroups && (
-              <button
-                onClick={onOpenStudyGroups}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold backdrop-blur-sm transition-all cursor-pointer"
-              >
-                <Users className="w-3.5 h-3.5 text-indigo-300" />
-                <span>Salas de estudio grupales</span>
-              </button>
-            )}
             {onOpenAITutor && (
               <button
                 onClick={onOpenAITutor}
@@ -129,10 +210,12 @@ export const SubjectView: React.FC<SubjectViewProps> = ({
             {subjectDocs.map((doc) => (
               <div
                 key={doc.id}
-                onClick={() => onOpenDocument && onOpenDocument(doc)}
-                className="p-3.5 rounded-xl border border-indigo-200 dark:border-indigo-800/80 bg-white dark:bg-slate-900 flex items-center justify-between gap-3 shadow-2xs hover:border-indigo-400 transition-all cursor-pointer group"
+                className="p-3.5 rounded-xl border border-indigo-200 dark:border-indigo-800/80 bg-white dark:bg-slate-900 flex items-center justify-between gap-3 shadow-2xs hover:border-indigo-400 transition-all group"
               >
-                <div className="flex items-center gap-2.5 min-w-0">
+                <div
+                  onClick={() => onOpenDocument && onOpenDocument(doc)}
+                  className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
+                >
                   <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-400 flex items-center justify-center font-bold text-[10px] uppercase shrink-0">
                     {doc.fileType}
                   </div>
@@ -146,10 +229,27 @@ export const SubjectView: React.FC<SubjectViewProps> = ({
                   </div>
                 </div>
 
-                <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 text-[11px] font-bold shrink-0">
-                  <Columns2 className="w-3 h-3" />
-                  <span className="hidden sm:inline">Pantalla dividida</span>
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <a
+                    href={doc.fileUrl || doc.dataUrl || `/api/documents/${doc.id}/file`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 text-slate-700 dark:text-slate-300 text-[11px] font-semibold transition-colors"
+                    title="Ver PDF o archivo tal cual en pestaña nueva"
+                  >
+                    <ExternalLink className="w-3 h-3 text-indigo-500" />
+                    <span>Ver tal cual</span>
+                  </a>
+
+                  <button
+                    onClick={() => onOpenDocument && onOpenDocument(doc)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/80 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 text-[11px] font-bold transition-colors cursor-pointer"
+                    title="Abrir con Tutor IA en pantalla dividida"
+                  >
+                    <Columns2 className="w-3 h-3 text-purple-500" />
+                    <span className="hidden sm:inline">Pantalla dividida</span>
+                  </button>
+                </div>
               </div>
             ))}
           </div>

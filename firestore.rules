@@ -32,12 +32,5 @@ service cloud.firestore {
         allow delete: if isOwner(userId);
       }
     }
-
-    // Virtual Study Groups & Rooms
-    match /studyGroups/{roomId} {
-      allow read: if true;
-      allow create, update: if isSignedIn();
-      allow delete: if isSignedIn();
-    }
   }
 }

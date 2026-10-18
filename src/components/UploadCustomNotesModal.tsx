@@ -13,7 +13,8 @@ import {
   Columns2,
   Trash2,
   FileQuestion,
-  Download
+  Download,
+  ExternalLink
 } from 'lucide-react';
 
 interface UploadCustomNotesModalProps {
@@ -106,46 +107,83 @@ export const UploadCustomNotesModal: React.FC<UploadCustomNotesModalProps> = ({
   };
 
   // Save document and/or generate topic
-  const handleSaveDocumentAndTopic = () => {
+  const handleSaveDocumentAndTopic = async () => {
     const title = newTopicTitle.trim() || uploadedFile?.name || 'Apuntes de clase';
 
     setIsProcessing(true);
 
-    setTimeout(() => {
-      // 1. Create UploadedDocument entity
-      let newDoc: UploadedDocument | null = null;
-      if (uploadedFile) {
-        const isPdf = uploadedFile.type === 'application/pdf' || uploadedFile.name.endsWith('.pdf');
-        const isImg = uploadedFile.type.startsWith('image/');
-        newDoc = {
-          id: `doc-${Date.now()}`,
-          name: title,
-          fileType: isPdf ? 'pdf' : isImg ? 'image' : 'text',
-          dataUrl: uploadedFileDataUrl || undefined,
-          textContent: pastedContent || (isPdf ? undefined : 'Documento cargado'),
-          courseId: selectedCourseId,
-          semesterId: selectedSemesterId,
-          subjectId: selectedSubjectId,
-          uploadedAt: new Date().toISOString(),
-          sizeBytes: uploadedFile.size
-        };
-      } else if (pastedContent.trim()) {
-        newDoc = {
-          id: `doc-${Date.now()}`,
-          name: title,
-          fileType: 'markdown',
-          textContent: pastedContent,
-          courseId: selectedCourseId,
-          semesterId: selectedSemesterId,
-          subjectId: selectedSubjectId,
-          uploadedAt: new Date().toISOString(),
-          sizeBytes: pastedContent.length
-        };
-      }
+    const docId = `doc-${Date.now()}`;
+    let newDoc: UploadedDocument | null = null;
+    let serverFileUrl: string | undefined = undefined;
 
-      if (newDoc && onSaveDocument) {
-        onSaveDocument(newDoc);
+    // Save file to server endpoint so all devices (PC, tablet, mobile) can view it tal cual
+    try {
+      const isPdf = uploadedFile ? (uploadedFile.type === 'application/pdf' || uploadedFile.name.endsWith('.pdf')) : false;
+      const isImg = uploadedFile ? uploadedFile.type.startsWith('image/') : false;
+      const fileType = uploadedFile ? (isPdf ? 'pdf' : isImg ? 'image' : 'text') : 'markdown';
+
+      const uploadPayload = {
+        id: docId,
+        name: title,
+        fileType,
+        courseId: selectedCourseId,
+        semesterId: selectedSemesterId,
+        subjectId: selectedSubjectId,
+        base64Data: uploadedFileDataUrl || undefined,
+        textContent: pastedContent || undefined,
+        sizeBytes: uploadedFile ? uploadedFile.size : pastedContent.length
+      };
+
+      const res = await fetch('/api/documents/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(uploadPayload)
+      });
+
+      if (res.ok) {
+        const resJson = await res.json();
+        if (resJson.document?.fileUrl) {
+          serverFileUrl = resJson.document.fileUrl;
+        }
       }
+    } catch (e) {
+      console.warn('Could not save to server endpoint, fallback to client state:', e);
+    }
+
+    if (uploadedFile) {
+      const isPdf = uploadedFile.type === 'application/pdf' || uploadedFile.name.endsWith('.pdf');
+      const isImg = uploadedFile.type.startsWith('image/');
+      newDoc = {
+        id: docId,
+        name: title,
+        fileType: isPdf ? 'pdf' : isImg ? 'image' : 'text',
+        fileUrl: serverFileUrl || `/api/documents/${docId}/file`,
+        dataUrl: uploadedFileDataUrl && uploadedFileDataUrl.length < 500000 ? uploadedFileDataUrl : undefined,
+        textContent: pastedContent || (isPdf ? undefined : 'Documento cargado'),
+        courseId: selectedCourseId,
+        semesterId: selectedSemesterId,
+        subjectId: selectedSubjectId,
+        uploadedAt: new Date().toISOString(),
+        sizeBytes: uploadedFile.size
+      };
+    } else if (pastedContent.trim()) {
+      newDoc = {
+        id: docId,
+        name: title,
+        fileType: 'markdown',
+        fileUrl: serverFileUrl || `/api/documents/${docId}/file`,
+        textContent: pastedContent,
+        courseId: selectedCourseId,
+        semesterId: selectedSemesterId,
+        subjectId: selectedSubjectId,
+        uploadedAt: new Date().toISOString(),
+        sizeBytes: pastedContent.length
+      };
+    }
+
+    if (newDoc && onSaveDocument) {
+      onSaveDocument(newDoc);
+    }
 
       // 2. Synthesize topic structure for flashcards and exercises
       const rawText = pastedContent.trim() || `Contenido de ${title}`;
@@ -206,6 +244,7 @@ export const UploadCustomNotesModal: React.FC<UploadCustomNotesModalProps> = ({
           id: `custom-topic-${Date.now()}`,
           number: newTopicNumber,
           title: `Tema ${newTopicNumber}: ${title}`,
+          subtitle: newTopicSubtitle.trim() || `Material y resumen de ${title}`,
           description: newTopicSubtitle.trim() || `Material personalizado de ${title}`,
           subtopics: generatedSubtopics,
           summaryPoints: [
@@ -368,6 +407,17 @@ export const UploadCustomNotesModal: React.FC<UploadCustomNotesModalProps> = ({
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
+                      <a
+                        href={doc.fileUrl || doc.dataUrl || `/api/documents/${doc.id}/file`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-xs font-semibold transition-colors"
+                        title="Ver PDF o archivo tal cual en pestaña nueva"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Ver tal cual</span>
+                      </a>
+
                       {onOpenDocument && (
                         <button
                           onClick={() => {
@@ -378,17 +428,13 @@ export const UploadCustomNotesModal: React.FC<UploadCustomNotesModalProps> = ({
                           title="Abrir en visor con Tutor IA en pantalla dividida"
                         >
                           <Columns2 className="w-3.5 h-3.5" />
-                          <span>Ver en pantalla dividida</span>
+                          <span>Pantalla dividida</span>
                         </button>
                       )}
 
                       {onDeleteDocument && (
                         <button
-                          onClick={() => {
-                            if (confirm(`¿Eliminar documento "${doc.name}"?`)) {
-                              onDeleteDocument(doc.id);
-                            }
-                          }}
+                          onClick={() => onDeleteDocument(doc.id)}
                           className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg transition-colors cursor-pointer"
                           title="Eliminar documento"
                         >

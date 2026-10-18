@@ -46,7 +46,6 @@ import { AuthModal } from './components/AuthModal';
 import { AITutorChat } from './components/AITutorChat';
 import { ExamCalendarView } from './components/ExamCalendarView';
 import { StudyPlannerView } from './components/StudyPlannerView';
-import { StudyGroupsView } from './components/StudyGroupsView';
 import { DocumentViewerWithAITutor } from './components/DocumentViewerWithAITutor';
 import { CookieConsentBanner } from './components/CookieConsentBanner';
 import { useSwipeGesture } from './hooks/useSwipeGesture';
@@ -265,6 +264,38 @@ export default function App() {
       if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
 
       syncTimeoutRef.current = setTimeout(async () => {
+        // Sanitize documents to prevent exceeding Firestore 1MB document limit
+        const sanitizedDocList = docList.map((d) => ({
+          id: d.id,
+          name: d.name,
+          fileType: d.fileType,
+          fileUrl: d.fileUrl || `/api/documents/${d.id}/file`,
+          courseId: d.courseId,
+          semesterId: d.semesterId,
+          subjectId: d.subjectId,
+          topicId: d.topicId || null,
+          uploadedAt: d.uploadedAt,
+          sizeBytes: d.sizeBytes
+        }));
+
+        // 1. Dual-sync: Backup to server storage (persists across devices & handles files)
+        try {
+          fetch('/api/sync-study-data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: currentUser.id,
+              exerciseTimes: times,
+              completedExercises: completed,
+              exams: examList,
+              uploadedDocuments: sanitizedDocList
+            })
+          }).catch(() => {});
+        } catch {
+          // ignore
+        }
+
+        // 2. Dual-sync: Real-time Firebase Firestore
         try {
           const studyDocRef = doc(db, 'users', currentUser.id, 'studyData', 'main');
           await setDoc(
@@ -274,22 +305,43 @@ export default function App() {
               exerciseTimes: times,
               completedExercises: completed,
               exams: examList,
-              uploadedDocuments: docList,
+              uploadedDocuments: sanitizedDocList,
               lastUpdated: new Date().toISOString()
             },
             { merge: true }
           );
         } catch (err) {
-          handleFirestoreError(err, OperationType.WRITE, `users/${currentUser.id}/studyData/main`);
+          console.warn('Firestore write warning:', err);
         }
-      }, 800);
+      }, 500);
     },
     [currentUser?.id]
   );
 
-  // Real Firebase Auth listener + Cross-device Firestore real-time listener
+  // Real Firebase Auth listener + Cross-device Firestore real-time listener + Server sync
   useEffect(() => {
     let unsubsSnapshot: (() => void) | null = null;
+
+    // Fetch server-stored documents on start
+    fetch('/api/documents')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data.documents) && data.documents.length > 0) {
+          setUploadedDocuments((prev) => {
+            const merged = [...prev];
+            data.documents.forEach((sd: UploadedDocument) => {
+              const idx = merged.findIndex((m) => m.id === sd.id);
+              if (idx === -1) {
+                merged.push(sd);
+              } else {
+                merged[idx] = { ...merged[idx], ...sd };
+              }
+            });
+            return merged;
+          });
+        }
+      })
+      .catch(() => {});
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (fireUser) => {
       if (unsubsSnapshot) {
@@ -299,6 +351,31 @@ export default function App() {
 
       if (fireUser) {
         try {
+          // Dual sync: pull from server backup cache
+          fetch(`/api/sync-study-data/${fireUser.uid}`)
+            .then((r) => r.json())
+            .then((serverData) => {
+              if (serverData.exerciseTimes) {
+                setExerciseTimes((prev) => ({ ...prev, ...serverData.exerciseTimes }));
+              }
+              if (serverData.completedExercises) {
+                setCompletedExercises((prev) => ({ ...prev, ...serverData.completedExercises }));
+              }
+              if (Array.isArray(serverData.exams) && serverData.exams.length > 0) {
+                setExams(serverData.exams);
+              }
+              if (Array.isArray(serverData.uploadedDocuments) && serverData.uploadedDocuments.length > 0) {
+                setUploadedDocuments((prev) => {
+                  const merged = [...prev];
+                  serverData.uploadedDocuments.forEach((sd: UploadedDocument) => {
+                    if (!merged.some((m) => m.id === sd.id)) merged.push(sd);
+                  });
+                  return merged;
+                });
+              }
+            })
+            .catch(() => {});
+
           const userDocRef = doc(db, 'users', fireUser.uid);
           const snap = await getDoc(userDocRef);
           let profile: UserProfile;
@@ -364,7 +441,18 @@ export default function App() {
                 setExams(data.exams);
               }
               if (Array.isArray(data.uploadedDocuments)) {
-                setUploadedDocuments(data.uploadedDocuments);
+                setUploadedDocuments((prev) => {
+                  const merged = [...prev];
+                  data.uploadedDocuments.forEach((sd: UploadedDocument) => {
+                    const idx = merged.findIndex((m) => m.id === sd.id);
+                    if (idx === -1) {
+                      merged.push(sd);
+                    } else {
+                      merged[idx] = { ...merged[idx], ...sd };
+                    }
+                  });
+                  return merged;
+                });
               }
             }
           });
@@ -472,30 +560,41 @@ export default function App() {
   }, []);
 
   // Back navigation: native browser history back with fallbacks
+  // Back navigation: deterministic semantic hierarchy
   const handleBack = useCallback(() => {
-    if (window.history.length > 1) {
-      window.history.back();
+    if (currentNav.view === 'document_viewer') {
+      navigateTo({ view: 'subject', documentId: null });
+    } else if (currentNav.view === 'exercise_solver') {
+      navigateTo({ view: 'exercises_list', exerciseId: null });
+    } else if (
+      currentNav.view === 'exercises_list' ||
+      currentNav.view === 'explanation' ||
+      currentNav.view === 'summary' ||
+      currentNav.view === 'mind_map' ||
+      currentNav.view === 'flashcards' ||
+      currentNav.view === 'exam_simulation'
+    ) {
+      navigateTo({ view: 'topic_menu' });
+    } else if (currentNav.view === 'topic_menu') {
+      navigateTo({ view: 'subject' });
+    } else if (currentNav.view === 'subject') {
+      navigateTo({ view: 'courses', subjectId: null, topicId: null });
+    } else if (currentNav.view === 'study_planner') {
+      navigateTo({ view: 'exam_calendar' });
+    } else if (
+      currentNav.view === 'exam_calendar' ||
+      currentNav.view === 'grades' ||
+      currentNav.view === 'analytics' ||
+      currentNav.view === 'custom_exam' ||
+      currentNav.view === 'ai_tutor_page' ||
+      currentNav.view === 'profile' ||
+      currentNav.view === 'pomodoro'
+    ) {
+      navigateTo({ view: 'courses' });
+    } else if (currentNav.view === 'courses') {
+      navigateTo({ view: 'welcome' });
     } else {
-      if (currentNav.view === 'document_viewer') {
-        navigateTo({ view: 'subject', documentId: null });
-      } else if (currentNav.view === 'exercise_solver') {
-        navigateTo({ view: 'exercises_list', exerciseId: null });
-      } else if (
-        currentNav.view === 'exercises_list' ||
-        currentNav.view === 'explanation' ||
-        currentNav.view === 'summary' ||
-        currentNav.view === 'mind_map' ||
-        currentNav.view === 'flashcards' ||
-        currentNav.view === 'exam_simulation'
-      ) {
-        navigateTo({ view: 'topic_menu' });
-      } else if (currentNav.view === 'topic_menu') {
-        navigateTo({ view: 'subject' });
-      } else if (currentNav.view === 'subject') {
-        navigateTo({ view: 'courses' });
-      } else {
-        navigateTo({ view: 'welcome' });
-      }
+      navigateTo({ view: 'welcome' });
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [currentNav.view, navigateTo]);
@@ -758,8 +857,8 @@ export default function App() {
 
   // Swipe navigation gesture for iPad and mobile
   const swipeContainerRef = useRef<HTMLDivElement>(null);
-  useSwipeGesture(swipeContainerRef, {
-    onSwipeRight: () => {
+  useSwipeGesture({
+    onSwipeBack: () => {
       if (currentNav.view !== 'welcome' && currentNav.view !== 'courses') {
         handleBack();
       }
@@ -816,8 +915,8 @@ export default function App() {
           <CourseSelector
             courses={courses}
             selectedCourseId={currentNav.courseId}
-            onSelectCourse={(courseId) => navigateTo({ courseId })}
-            onSelectSubject={(subject, courseId, semesterId) => {
+            selectedSemesterId={currentNav.semesterId}
+            onSelectSubject={(courseId, semesterId, subject) => {
               navigateTo({
                 view: 'subject',
                 courseId,
@@ -832,7 +931,26 @@ export default function App() {
         {currentNav.view === 'subject' && currentSubject && (
           <SubjectView
             subject={currentSubject}
+            courses={courses}
             uploadedDocuments={uploadedDocuments}
+            onGoToCourses={() =>
+              navigateTo({
+                view: 'courses',
+                courseId: currentNav.courseId,
+                semesterId: null,
+                subjectId: null,
+                topicId: null
+              })
+            }
+            onSelectSubject={(courseId, semesterId, subject) => {
+              navigateTo({
+                view: 'subject',
+                courseId,
+                semesterId,
+                subjectId: subject.id,
+                topicId: null
+              });
+            }}
             onSelectTopic={(topic) => {
               navigateTo({
                 view: 'topic_menu',
@@ -866,6 +984,16 @@ export default function App() {
           <TopicMenu
             subject={currentSubject}
             topic={currentTopic}
+            onBackToSubject={() => navigateTo({ view: 'subject', topicId: null })}
+            onGoToCourses={() =>
+              navigateTo({
+                view: 'courses',
+                courseId: currentNav.courseId,
+                semesterId: null,
+                subjectId: null,
+                topicId: null
+              })
+            }
             onOpenMindMap={() => navigateTo({ view: 'mind_map' })}
             onOpenSummary={() => navigateTo({ view: 'summary' })}
             onOpenExplanation={(st) =>
@@ -958,25 +1086,29 @@ export default function App() {
           />
         )}
 
-        {currentNav.view === 'exam_simulation' && currentTopic && (
+        {currentNav.view === 'exam_simulation' && currentSubject && currentTopic && (
           <ExamSimulationView
+            subject={currentSubject}
             topic={currentTopic}
-            onBack={() => navigateTo({ view: 'topic_menu' })}
+            onExit={() => navigateTo({ view: 'topic_menu' })}
           />
         )}
 
         {currentNav.view === 'pomodoro' && (
           <PomodoroStudyView
-            subjects={allFlattenedSubjects}
             onBack={handleBack}
-            onTimeEarned={(sec) => {
+            onRecordStudyTime={(sec) => {
               // Time recorded
             }}
           />
         )}
 
         {currentNav.view === 'grades' && (
-          <SubjectGradesView courses={courses} onBack={handleBack} />
+          <SubjectGradesView
+            courses={courses}
+            userId={currentUser?.id || 'guest'}
+            onBack={handleBack}
+          />
         )}
 
         {currentNav.view === 'profile' && (
@@ -1008,7 +1140,10 @@ export default function App() {
         )}
 
         {currentNav.view === 'custom_exam' && (
-          <CustomMultiTopicExamView courses={courses} onBack={handleBack} />
+          <CustomMultiTopicExamView
+            subjects={allFlattenedSubjects}
+            onBack={handleBack}
+          />
         )}
 
         {currentNav.view === 'ai_tutor_page' && (

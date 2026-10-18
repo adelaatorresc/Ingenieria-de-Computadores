@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
@@ -11,6 +12,11 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+
+const UPLOADS_DIR = path.resolve(__dirname, 'uploaded_files');
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -233,6 +239,202 @@ Asegúrate de que el JSON sea completamente válido y parseable directamente con
   } catch (error: any) {
     console.error('Parse exams API error:', error);
     res.status(500).json({ error: error.message || 'Error al procesar el calendario de exámenes' });
+  }
+});
+
+// -------------------------------------------------------------
+// Real PDF & Document Storage Endpoints (Viewing and Sync)
+// -------------------------------------------------------------
+
+// Upload or save document file
+app.post('/api/documents/upload', (req, res) => {
+  try {
+    const { id, name, fileType, courseId, semesterId, subjectId, topicId, base64Data, textContent, sizeBytes } = req.body;
+    if (!id || !name) {
+      return res.status(400).json({ error: 'Missing document id or name' });
+    }
+
+    const docId = id.replace(/[^a-zA-Z0-9_\-]/g, '_');
+    let ext = 'pdf';
+    let mimeType = 'application/pdf';
+
+    if (fileType === 'image') {
+      ext = 'png';
+      mimeType = 'image/png';
+    } else if (fileType === 'markdown') {
+      ext = 'md';
+      mimeType = 'text/markdown';
+    } else if (fileType === 'text') {
+      ext = 'txt';
+      mimeType = 'text/plain';
+    }
+
+    const filePath = path.join(UPLOADS_DIR, `${docId}.${ext}`);
+    const metaPath = path.join(UPLOADS_DIR, `${docId}.meta.json`);
+
+    if (base64Data) {
+      const cleanBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+      const buffer = Buffer.from(cleanBase64, 'base64');
+      fs.writeFileSync(filePath, buffer);
+    } else if (textContent) {
+      fs.writeFileSync(filePath, textContent, 'utf-8');
+    }
+
+    const meta = {
+      id: docId,
+      name,
+      fileType: fileType || 'pdf',
+      courseId: courseId || '1',
+      semesterId: semesterId || '1',
+      subjectId: subjectId || 'alg',
+      topicId: topicId || null,
+      uploadedAt: new Date().toISOString(),
+      sizeBytes: sizeBytes || (fs.existsSync(filePath) ? fs.statSync(filePath).size : 0),
+      fileUrl: `/api/documents/${docId}/file`,
+      ext,
+      mimeType
+    };
+
+    fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf-8');
+
+    res.json({ success: true, document: meta });
+  } catch (err: any) {
+    console.error('Error uploading document:', err);
+    res.status(500).json({ error: err.message || 'Error saving document' });
+  }
+});
+
+// List all uploaded documents across devices
+app.get('/api/documents', (_req, res) => {
+  try {
+    const files = fs.readdirSync(UPLOADS_DIR);
+    const metaFiles = files.filter((f) => f.endsWith('.meta.json'));
+    const documents = metaFiles
+      .map((f) => {
+        try {
+          const raw = fs.readFileSync(path.join(UPLOADS_DIR, f), 'utf-8');
+          return JSON.parse(raw);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+
+    res.json({ documents });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Stream / view real PDF or document tal cual
+app.get('/api/documents/:id/file', (req, res) => {
+  try {
+    const docId = req.params.id.replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const metaPath = path.join(UPLOADS_DIR, `${docId}.meta.json`);
+
+    let meta: any = null;
+    if (fs.existsSync(metaPath)) {
+      meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+    }
+
+    const possibleExts = ['pdf', 'png', 'jpg', 'jpeg', 'md', 'txt'];
+    let foundPath: string | null = null;
+    let foundExt = 'pdf';
+
+    for (const ext of possibleExts) {
+      const candidate = path.join(UPLOADS_DIR, `${docId}.${ext}`);
+      if (fs.existsSync(candidate)) {
+        foundPath = candidate;
+        foundExt = ext;
+        break;
+      }
+    }
+
+    if (!foundPath) {
+      return res.status(404).send('Documento no encontrado en el servidor.');
+    }
+
+    const contentType =
+      foundExt === 'pdf'
+        ? 'application/pdf'
+        : foundExt === 'png'
+        ? 'image/png'
+        : foundExt === 'jpg' || foundExt === 'jpeg'
+        ? 'image/jpeg'
+        : foundExt === 'md'
+        ? 'text/markdown; charset=utf-8'
+        : 'text/plain; charset=utf-8';
+
+    const filename = meta?.name ? `${meta.name}.${foundExt}` : `documento_${docId}.${foundExt}`;
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(filename)}"`);
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+
+    const fileStream = fs.createReadStream(foundPath);
+    fileStream.pipe(res);
+  } catch (err: any) {
+    console.error('Error serving document file:', err);
+    res.status(500).send('Error al abrir el documento');
+  }
+});
+
+// Delete document
+app.delete('/api/documents/:id', (req, res) => {
+  try {
+    const docId = req.params.id.replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const metaPath = path.join(UPLOADS_DIR, `${docId}.meta.json`);
+    if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath);
+
+    const possibleExts = ['pdf', 'png', 'jpg', 'jpeg', 'md', 'txt'];
+    for (const ext of possibleExts) {
+      const candidate = path.join(UPLOADS_DIR, `${docId}.${ext}`);
+      if (fs.existsSync(candidate)) fs.unlinkSync(candidate);
+    }
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Cross-device study state backup & sync endpoint
+app.post('/api/sync-study-data', (req, res) => {
+  try {
+    const { userId, exerciseTimes, completedExercises, exams, uploadedDocuments } = req.body;
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+
+    const cleanUserId = userId.replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const userFilePath = path.join(UPLOADS_DIR, `user_sync_${cleanUserId}.json`);
+
+    const dataToSave = {
+      userId,
+      exerciseTimes: exerciseTimes || {},
+      completedExercises: completedExercises || {},
+      exams: exams || [],
+      uploadedDocuments: uploadedDocuments || [],
+      lastUpdated: new Date().toISOString()
+    };
+
+    fs.writeFileSync(userFilePath, JSON.stringify(dataToSave, null, 2), 'utf-8');
+    res.json({ success: true, lastUpdated: dataToSave.lastUpdated });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/sync-study-data/:userId', (req, res) => {
+  try {
+    const cleanUserId = req.params.userId.replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const userFilePath = path.join(UPLOADS_DIR, `user_sync_${cleanUserId}.json`);
+
+    if (fs.existsSync(userFilePath)) {
+      const data = JSON.parse(fs.readFileSync(userFilePath, 'utf-8'));
+      return res.json(data);
+    }
+    return res.json({ exerciseTimes: {}, completedExercises: {}, exams: [], uploadedDocuments: [] });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

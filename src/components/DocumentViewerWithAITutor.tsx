@@ -15,7 +15,8 @@ import {
   ZoomOut,
   X,
   FileQuestion,
-  HelpCircle
+  HelpCircle,
+  ExternalLink
 } from 'lucide-react';
 import { FormattedMarkdownText } from './FormattedMarkdownText';
 
@@ -120,9 +121,10 @@ export const DocumentViewerWithAITutor: React.FC<DocumentViewerWithAITutorProps>
   };
 
   const handleDownload = () => {
-    if (document.dataUrl) {
+    const src = document.fileUrl || document.dataUrl || `/api/documents/${document.id}/file`;
+    if (document.fileType === 'pdf' || document.fileType === 'image') {
       const a = window.document.createElement('a');
-      a.href = document.dataUrl;
+      a.href = src;
       a.download = document.name;
       a.click();
     } else if (document.textContent) {
@@ -133,6 +135,11 @@ export const DocumentViewerWithAITutor: React.FC<DocumentViewerWithAITutorProps>
       a.download = document.name.endsWith('.md') ? document.name : `${document.name}.md`;
       a.click();
       URL.revokeObjectURL(url);
+    } else {
+      const a = window.document.createElement('a');
+      a.href = src;
+      a.download = document.name;
+      a.click();
     }
   };
 
@@ -218,12 +225,10 @@ export const DocumentViewerWithAITutor: React.FC<DocumentViewerWithAITutorProps>
           {onDeleteDocument && (
             <button
               onClick={() => {
-                if (confirm(`¿Eliminar este documento "${document.name}"?`)) {
-                  onDeleteDocument(document.id);
-                  onBack();
-                }
+                onDeleteDocument(document.id);
+                onBack();
               }}
-              className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 dark:hover:border-rose-800 transition-colors"
+              className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-transparent hover:border-rose-200 dark:hover:border-rose-800 transition-colors cursor-pointer"
               title="Eliminar documento"
             >
               <Trash2 className="w-4 h-4" />
@@ -240,18 +245,59 @@ export const DocumentViewerWithAITutor: React.FC<DocumentViewerWithAITutorProps>
       >
         {/* Left Side: Document Viewer */}
         <div className="h-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900 overflow-hidden flex flex-col shadow-sm">
-          {document.fileType === 'pdf' && document.dataUrl ? (
-            <div className="w-full h-full relative">
-              <iframe
-                src={`${document.dataUrl}#toolbar=1&navpanes=0`}
-                className="w-full h-full border-0"
-                title={document.name}
-              />
+          {document.fileType === 'pdf' ? (
+            <div className="w-full h-full flex flex-col bg-slate-900">
+              {/* Document Subheader with External Tab and Download */}
+              <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-950 border-b border-slate-800 text-xs shrink-0">
+                <div className="flex items-center gap-2 truncate">
+                  <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
+                  <span className="font-semibold text-slate-200 truncate">{document.name}</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <a
+                    href={document.fileUrl || document.dataUrl || `/api/documents/${document.id}/file`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-colors shadow-2xs"
+                    title="Ver PDF original tal cual en pestaña nueva"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Ver PDF tal cual</span>
+                  </a>
+                  <button
+                    onClick={handleDownload}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Descargar</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* PDF Preview Iframe */}
+              <div className="flex-1 w-full relative bg-slate-950">
+                <iframe
+                  src={`${document.fileUrl || document.dataUrl || `/api/documents/${document.id}/file`}#toolbar=1&navpanes=0`}
+                  className="w-full h-full border-0 bg-white"
+                  title={document.name}
+                />
+              </div>
             </div>
-          ) : document.fileType === 'image' && document.dataUrl ? (
-            <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-slate-950">
+          ) : document.fileType === 'image' ? (
+            <div className="flex-1 overflow-auto p-4 flex flex-col items-center justify-center bg-slate-950 relative">
+              <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+                <a
+                  href={document.fileUrl || document.dataUrl || `/api/documents/${document.id}/file`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs shadow-md"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Ver imagen original</span>
+                </a>
+              </div>
               <img
-                src={document.dataUrl}
+                src={document.fileUrl || document.dataUrl || `/api/documents/${document.id}/file`}
                 alt={document.name}
                 style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'center' }}
                 className="max-w-full max-h-full object-contain rounded-lg shadow-lg transition-transform duration-150"

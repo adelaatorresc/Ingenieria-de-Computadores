@@ -9,7 +9,8 @@ import {
   ArrowRight,
   ChevronRight,
   Layers,
-  Sparkles
+  Sparkles,
+  ArrowLeft
 } from 'lucide-react';
 
 interface TopicMenuProps {
@@ -21,6 +22,8 @@ interface TopicMenuProps {
   onOpenExercises: () => void;
   onOpenExam: () => void;
   onOpenFlashcards: () => void;
+  onBackToSubject?: () => void;
+  onGoToCourses?: () => void;
 }
 
 export const TopicMenu: React.FC<TopicMenuProps> = ({
@@ -31,12 +34,36 @@ export const TopicMenu: React.FC<TopicMenuProps> = ({
   onOpenExplanation,
   onOpenExercises,
   onOpenExam,
-  onOpenFlashcards
+  onOpenFlashcards,
+  onBackToSubject,
+  onGoToCourses
 }) => {
   const isTSO = subject.id === 'tso';
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+      {/* Navigation Breadcrumb Bar */}
+      <div className="flex flex-wrap items-center gap-2 mb-6">
+        {onBackToSubject && (
+          <button
+            onClick={onBackToSubject}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 transition-colors shadow-2xs cursor-pointer"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Volver a {subject.shortName || subject.name}</span>
+          </button>
+        )}
+        {onGoToCourses && (
+          <button
+            onClick={onGoToCourses}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/40 text-xs font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 transition-colors cursor-pointer"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
+            <span>Elegir otra asignatura</span>
+          </button>
+        )}
+      </div>
+
       {/* Header Info */}
       <div className="mb-8">
         <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
