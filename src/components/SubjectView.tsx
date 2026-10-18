@@ -288,15 +288,6 @@ export const SubjectView: React.FC<SubjectViewProps> = ({
                 <span>Subir apuntes o PDF de {subject.shortName || subject.name}</span>
               </button>
             )}
-            {onOpenStudyGroups && (
-              <button
-                onClick={onOpenStudyGroups}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/30 transition-all cursor-pointer"
-              >
-                <Users className="w-4 h-4" />
-                <span>Salas de Estudio de {subject.shortName || subject.name}</span>
-              </button>
-            )}
             {onOpenAITutor && (
               <button
                 onClick={onOpenAITutor}

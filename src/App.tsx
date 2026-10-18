@@ -897,7 +897,6 @@ export default function App() {
           onOpenAuth={() => setIsAuthModalOpen(true)}
           onOpenCalendar={() => navigateTo({ view: 'exam_calendar' })}
           onOpenStudyPlanner={() => navigateTo({ view: 'study_planner' })}
-          onOpenStudyGroups={() => navigateTo({ view: 'study_groups' })}
           user={currentUser}
           subjectTitle={currentSubject?.name}
           topicTitle={currentTopic?.title}
@@ -971,7 +970,6 @@ export default function App() {
                 topicId: topic.id
               });
             }}
-            onOpenStudyGroups={() => navigateTo({ view: 'study_groups' })}
             onOpenAITutor={() => navigateTo({ view: 'ai_tutor_page' })}
             onOpenDocument={(doc) =>
               navigateTo({ view: 'document_viewer', documentId: doc.id })
@@ -1198,15 +1196,6 @@ export default function App() {
                 topicId
               });
             }}
-          />
-        )}
-
-        {currentNav.view === 'study_groups' && (
-          <StudyGroupsView
-            courses={courses}
-            currentUser={currentUser}
-            onBack={handleBack}
-            onOpenAITutor={() => navigateTo({ view: 'ai_tutor_page' })}
           />
         )}
       </main>

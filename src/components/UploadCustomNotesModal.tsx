@@ -304,7 +304,6 @@ export const UploadCustomNotesModal: React.FC<UploadCustomNotesModalProps> = ({
           onOpenDocument(newDoc);
         }
       }, 1200);
-    }, 600);
   };
 
   // Filter documents for current subject
